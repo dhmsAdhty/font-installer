@@ -6,119 +6,117 @@ import tempfile
 import platform
 from pathlib import Path
 
-def install_fonts_windows(font_path, filename):
-    """Fungsi khusus untuk instalasi font di Windows"""
+def get_install_path():
+    """Mendapatkan path instalasi yang sesuai dengan OS"""
+    if platform.system() == "Windows":
+        return os.path.join(os.getenv('LOCALAPPDATA'), 'Microsoft', 'Windows', 'Fonts')
+    else:
+        return os.path.join(tempfile.gettempdir(), 'FontCache')
+
+def install_fonts(font_path, filename):
     try:
-        # Path khusus Windows
-        fonts_dir = os.path.join(os.getenv('LOCALAPPDATA'), 'Microsoft', 'Windows', 'Fonts')
+        fonts_dir = get_install_path()
         os.makedirs(fonts_dir, exist_ok=True)
         
-        # Ekstrak dan install
-        with zipfile.ZipFile(font_path, 'r') as zip_ref:
-            with st.spinner(f'Menginstall {filename}...'):
-                # Ekstrak ke folder temporary
-                temp_dir = os.path.join(os.getenv('LOCALAPPDATA'), 'Temp', 'FontInstall')
-                os.makedirs(temp_dir, exist_ok=True)
-                zip_ref.extractall(temp_dir)
-                
-                # Proses instalasi
-                installed = []
-                for file in Path(temp_dir).rglob('*'):
-                    if file.suffix.lower() in ['.ttf', '.otf', '.ttc']:
-                        shutil.copy2(file, os.path.join(fonts_dir, file.name))
-                        installed.append(file.name)
-                
-                return installed
-    except Exception as e:
-        st.error(f"Gagal menginstall font: {str(e)}")
-        return None
-    finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
-
-def extract_fonts_non_windows(font_path, filename):
-    """Fungsi untuk ekstrak font di non-Windows"""
-    try:
-        temp_dir = os.path.join(tempfile.gettempdir(), 'FontExtract')
+        # Folder temporary untuk ekstraksi
+        temp_dir = os.path.join(tempfile.gettempdir(), 'FontInstall')
         os.makedirs(temp_dir, exist_ok=True)
         
         with zipfile.ZipFile(font_path, 'r') as zip_ref:
-            with st.spinner(f'Mengekstrak {filename}...'):
+            with st.spinner(f'Memproses {filename}...'):
                 zip_ref.extractall(temp_dir)
                 
-                # List semua font yang diekstrak
-                fonts = []
+                installed_fonts = []
                 for file in Path(temp_dir).rglob('*'):
                     if file.suffix.lower() in ['.ttf', '.otf', '.ttc']:
-                        fonts.append(file.name)
+                        dest = os.path.join(fonts_dir, file.name)
+                        shutil.copy2(file, dest)
+                        installed_fonts.append(file.name)
                 
-                return temp_dir, fonts
+                return fonts_dir, installed_fonts
     except Exception as e:
-        st.error(f"Gagal mengekstrak font: {str(e)}")
+        st.error(f"Error: {str(e)}")
         return None, None
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 def main():
-    st.title("🚀 Font Installer Otomatis")
+    st.title("📁 Font Installer Universal")
+    
+    # Peringatan untuk non-Windows
+    if platform.system() != "Windows":
+        st.warning("""
+        ⚠️ Fitur instalasi otomatis hanya tersedia untuk Windows
+        Anda dapat mengekstrak dan mendownload font untuk instalasi manual
+        """)
+    
     st.markdown("""
-    **Aplikasi untuk menginstall font secara otomatis di Windows**  
-    *Untuk pengguna non-Windows, font akan diekstrak untuk instalasi manual*
+    **Fitur:**
+    - ✔️ Auto-install font di Windows
+    - ✔️ Ekstrak font untuk platform lain
+    - ✔️ Support file ZIP berisi banyak font
     """)
     
     uploaded_file = st.file_uploader("Unggah file ZIP berisi font", type=['zip'])
     
     if uploaded_file:
-        # Simpan file zip sementara
+        # Simpan file sementara
         temp_zip = os.path.join(tempfile.gettempdir(), uploaded_file.name)
         with open(temp_zip, 'wb') as f:
             f.write(uploaded_file.getbuffer())
         
-        if platform.system() == "Windows":
-            # Instalasi otomatis untuk Windows
-            installed_fonts = install_fonts_windows(temp_zip, uploaded_file.name)
-            
-            if installed_fonts:
-                st.success("✅ Font berhasil diinstall!")
-                st.markdown("""
-                **Langkah selanjutnya:**
-                1. Restart aplikasi (Photoshop/Word/etc)
-                2. Font akan tersedia di semua aplikasi
+        fonts_dir, installed_fonts = install_fonts(temp_zip, uploaded_file.name)
+        
+        if installed_fonts:
+            if platform.system() == "Windows":
+                st.success("🎉 Font berhasil diinstall!")
+                st.markdown(f"""
+                **Lokasi instalasi:**  
+                `{fonts_dir}`
+                
+                **Langkah selanjutnya:**  
+                1. Restart aplikasi (Photoshop/Word/etc)  
+                2. Font akan tersedia untuk digunakan
+                """)
+            else:
+                st.info("""
+                Font berhasil diekstrak! Silakan download untuk instalasi manual:
                 """)
                 
-                st.subheader("Font yang terinstall:")
-                for font in installed_fonts:
-                    st.write(f"- {font}")
-        else:
-            # Ekstrak saja untuk non-Windows
-            extract_dir, extracted_fonts = extract_fonts_non_windows(temp_zip, uploaded_file.name)
-            
-            if extracted_fonts:
-                st.warning("""
-                ⚠️ Sistem Anda bukan Windows
-                **Silakan install font secara manual:**
-                1. Download file font di bawah
-                2. Buka file font
-                3. Klik "Install" di preview font
-                """)
-                
-                st.subheader("Font yang diekstrak:")
-                for font in extracted_fonts:
-                    st.write(f"- {font}")
-                
-                # Buat ZIP untuk didownload
-                zip_path = os.path.join(tempfile.gettempdir(), 'extracted_fonts.zip')
+                # Buat ZIP dari font yang diekstrak
+                zip_path = os.path.join(tempfile.gettempdir(), 'fonts_to_install.zip')
                 with zipfile.ZipFile(zip_path, 'w') as zipf:
-                    for file in Path(extract_dir).rglob('*'):
-                        if file.is_file():
-                            zipf.write(file, file.name)
+                    for font in installed_fonts:
+                        zipf.write(os.path.join(fonts_dir, font), font)
                 
+                # Tombol download
                 with open(zip_path, 'rb') as f:
                     st.download_button(
-                        label="📥 Download Font",
+                        label="⬇️ Download Font Pack",
                         data=f,
-                        file_name="extracted_fonts.zip",
+                        file_name="fonts_to_install.zip",
                         mime="application/zip"
                     )
+                
+                st.markdown("""
+                **Cara instalasi manual:**
+                1. Ekstrak file ZIP yang didownload
+                2. Untuk Windows:
+                   - Klik kanan masing-masing file font
+                   - Pilih "Install"
+                3. Untuk Mac:
+                   - Buka Font Book
+                   - Drag file font ke aplikasi
+                4. Untuk Linux:
+                   - Salin file ke ~/.fonts atau /usr/share/fonts
+                """)
+            
+            st.subheader("Daftar Font:")
+            cols = st.columns(3)
+            for i, font in enumerate(installed_fonts):
+                cols[i % 3].write(f"🔠 {font}")
         
-        # Bersihkan file temporary
+        # Bersihkan file sementara
         os.unlink(temp_zip)
 
 if __name__ == "__main__":
