@@ -8,3 +8,6 @@ Aplikasi executable (.exe) untuk meng-unzip dan menginstal font **tanpa perlu ha
 - ✅ Support format TTF, OTF, TTC
 - ✅ Auto-clean file temporary
 - ✅ Versi portable (tidak perlu install Python)
+
+## 📌 **Letak File .exe**
+- path: dist\main.exe
