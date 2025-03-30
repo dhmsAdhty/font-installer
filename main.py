@@ -1,25 +1,25 @@
 import os
 import zipfile
 import shutil
-import streamlit as st
 import tempfile
 import platform
 from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog, messagebox
 
-def is_real_windows():
-    """Deteksi apakah benar-benar running di Windows lokal (bukan di cloud)"""
-    return platform.system() == "Windows" and os.getenv('LOCALAPPDATA') is not None
-
-def install_fonts_windows(font_path, filename):
-    """Fungsi khusus instalasi font di Windows lokal"""
+def install_fonts(zip_path):
+    """Fungsi instalasi font di Windows"""
     try:
+        # Path instalasi font Windows
         fonts_dir = os.path.join(os.getenv('LOCALAPPDATA'), 'Microsoft', 'Windows', 'Fonts')
         os.makedirs(fonts_dir, exist_ok=True)
         
+        # Folder temporary
         temp_dir = os.path.join(os.getenv('LOCALAPPDATA'), 'Temp', 'FontInstall')
         os.makedirs(temp_dir, exist_ok=True)
         
-        with zipfile.ZipFile(font_path, 'r') as zip_ref:
+        # Ekstrak ZIP
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(temp_dir)
             
             installed_fonts = []
@@ -31,77 +31,74 @@ def install_fonts_windows(font_path, filename):
             
             return installed_fonts
     except Exception as e:
-        st.error(f"Gagal menginstall font: {str(e)}")
-        return None
+        raise e
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
+def select_file():
+    """GUI untuk memilih file"""
+    root = tk.Tk()
+    root.withdraw()  # Sembunyikan window utama
+    
+    file_path = filedialog.askopenfilename(
+        title="Pilih file ZIP berisi font",
+        filetypes=[("ZIP files", "*.zip")]
+    )
+    
+    return file_path
+
 def main():
-    st.title("🔄 Font Installer Otomatis")
+    # Buat GUI sederhana
+    root = tk.Tk()
+    root.title("Font Installer for Windows")
+    root.geometry("500x400")
     
-    if is_real_windows():
-        st.success("🔍 Mode Windows lokal terdeteksi - instalasi otomatis aktif")
-    else:
-        st.warning("⚠️ Mode non-Windows - hanya ekstraksi file tersedia")
+    def on_install():
+        file_path = select_file()
+        if file_path:
+            try:
+                installed = install_fonts(file_path)
+                if installed:
+                    message = "Font berhasil diinstall:\n\n" + "\n".join(f"✓ {f}" for f in installed)
+                    message += "\n\nLokasi: AppData\\Local\\Microsoft\\Windows\\Fonts"
+                    message += "\n\nRestart aplikasi untuk melihat font baru"
+                    messagebox.showinfo("Sukses", message)
+                else:
+                    messagebox.showwarning("Peringatan", "Tidak ditemukan font yang valid dalam file ZIP")
+            except Exception as e:
+                messagebox.showerror("Error", f"Gagal menginstall font:\n{str(e)}")
     
-    uploaded_file = st.file_uploader("Unggah file ZIP berisi font", type=['zip'])
+    # UI Elements
+    tk.Label(
+        root, 
+        text="Font Installer for Windows",
+        font=("Arial", 16, "bold")
+    ).pack(pady=20)
     
-    if uploaded_file:
-        temp_zip = os.path.join(tempfile.gettempdir(), uploaded_file.name)
-        with open(temp_zip, 'wb') as f:
-            f.write(uploaded_file.getbuffer())
-        
-        if is_real_windows():
-            # INSTALASI OTOMATIS UNTUK WINDOWS LOKAL
-            installed_fonts = install_fonts_windows(temp_zip, uploaded_file.name)
-            
-            if installed_fonts:
-                st.success("🎉 Font berhasil diinstall otomatis!")
-                st.markdown(f"""
-                **Lokasi instalasi:**  
-                `AppData\\Local\\Microsoft\\Windows\\Fonts`
-                
-                **Langkah selanjutnya:**  
-                1. Restart aplikasi yang menggunakan font  
-                2. Font siap digunakan
-                """)
-                
-                st.subheader("Font yang terinstall:")
-                for font in installed_fonts:
-                    st.write(f"✓ {font}")
-        else:
-            # EKSTRAK SAJA UNTUK NON-WINDOWS
-            temp_dir = os.path.join(tempfile.gettempdir(), 'FontExtract')
-            os.makedirs(temp_dir, exist_ok=True)
-            
-            with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
-                zip_ref.extractall(temp_dir)
-                
-                extracted_fonts = []
-                for file in Path(temp_dir).rglob('*'):
-                    if file.suffix.lower() in ['.ttf', '.otf', '.ttc']:
-                        extracted_fonts.append(file.name)
-                
-                if extracted_fonts:
-                    st.info("Font berhasil diekstrak (instalasi manual diperlukan)")
-                    
-                    # Buat ZIP untuk didownload
-                    zip_path = os.path.join(tempfile.gettempdir(), 'extracted_fonts.zip')
-                    with zipfile.ZipFile(zip_path, 'w') as zipf:
-                        for file in Path(temp_dir).rglob('*'):
-                            if file.is_file() and file.suffix.lower() in ['.ttf', '.otf', '.ttc']:
-                                zipf.write(file, file.name)
-                    
-                    with open(zip_path, 'rb') as f:
-                        st.download_button(
-                            label="⬇️ Download Font Pack",
-                            data=f,
-                            file_name="extracted_fonts.zip",
-                            mime="application/zip"
-                        )
-        
-        # Bersihkan file temporary
-        os.unlink(temp_zip)
+    tk.Label(
+        root,
+        text="Aplikasi ini akan menginstall font ke sistem Windows Anda\nTanpa perlu hak administrator",
+        wraplength=400
+    ).pack(pady=10)
+    
+    tk.Button(
+        root,
+        text="Pilih File ZIP Font",
+        command=on_install,
+        bg="#4CAF50",
+        fg="white",
+        padx=20,
+        pady=10,
+        font=("Arial", 12)
+    ).pack(pady=30)
+    
+    tk.Label(
+        root,
+        text="Pastikan file ZIP berisi file font (.ttf/.otf)",
+        font=("Arial", 9)
+    ).pack()
+    
+    root.mainloop()
 
 if __name__ == "__main__":
     main()
